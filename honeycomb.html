@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crash Safety Simulator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        :root {
+            --cyan: #00f0ff;
+            --blue: #3b82f6;
+            --dark: #0f172a;
+            --bg: #030508;
+            --text: #e2e8f0;
+            --glass: rgba(15, 23, 42, 0.65);
+            --glass-border: rgba(255, 255, 255, 0.08);
+        }
+
+        body { margin: 0; overflow: hidden; font-family: 'Outfit', sans-serif; background: var(--bg); color: var(--text); }
+        
+        /* --- NAVIGATION BAR --- */
+        nav {
+            position: fixed; top: 0; left: 0; width: 100%; height: 80px;
+            background: rgba(3, 5, 8, 0.85); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--glass-border);
+            display: flex; justify-content: space-between; align-items: center; z-index: 1000; box-sizing: border-box; padding: 0 50px;
+        }
+        .nav-brand { font-weight: 900; font-size: 1.5rem; color: #fff; letter-spacing: 2px; text-transform: uppercase; }
+        .nav-brand span { color: var(--cyan); text-shadow: 0 0 15px rgba(0, 240, 255, 0.4); }
+        .nav-links { display: flex; gap: 40px; }
+        .nav-link {
+            color: #94a3b8; text-decoration: none; font-weight: 700; font-size: 0.9rem; text-transform: uppercase;
+            letter-spacing: 2px; cursor: pointer; transition: all 0.4s ease; position: relative; padding: 10px 0;
+        }
+        .nav-link:hover { color: #fff; text-shadow: 0 0 10px rgba(0, 240, 255, 0.5); }
+        .nav-link.active { color: var(--cyan); text-shadow: 0 0 15px rgba(0, 240, 255, 0.6); }
+        .nav-link::after {
+            content: ''; position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+            width: 0%; height: 3px; background: var(--cyan); transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 -2px 10px var(--cyan); border-radius: 3px;
+        }
+        .nav-link.active::after { width: 100%; }
+
+        /* --- TAB SYSTEM & ANIMATIONS --- */
+        .tab-section {
+            position: absolute; top: 80px; left: 0; width: 100%; height: calc(100vh - 80px);
+            opacity: 0; pointer-events: none; 
+            transition: opacity 0.6s ease, transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+            transform: scale(0.98) translateY(20px); overflow-y: auto; box-sizing: border-box;
+        }
+        .tab-section.active { opacity: 1; pointer-events: all; transform: scale(1) translateY(0); }
+
+        /* --- TAB 1: HOME (INTRO) --- */
+        #tab-home {
+            display: flex; flex-direction: column; justify-content: flex-start; align-items: center; text-align: center;
+            background: radial-gradient(circle at center, #0f172a 0%, #030508 100%);
+            position: relative; overflow-y: auto; padding: 60px 20px 100px 20px;
+        }
+        
+        .honeycomb-bg {
+            position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; z-index: 0; opacity: 0.15;
+            background-image: url("data:image/svg+xml,%3Csvg width='60' height='103.92304845413264' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 103.92304845413264L0 86.60254037844386L0 51.96152422706632L30 34.64101615137754L60 51.96152422706632L60 86.60254037844386Z' fill='none' stroke='%2300f0ff' stroke-width='2'/%3E%3Cpath d='M0 51.96152422706632L-30 34.64101615137754L-30 0L0 -17.32050807568877L30 0L30 34.64101615137754Z' fill='none' stroke='%2300f0ff' stroke-width='2'/%3E%3C/svg%3E");
+            background-size: 100px 173.2px; animation: panGrid 30s linear infinite; pointer-events: none;
+        }
+        @keyframes panGrid { 0% { transform: translate(0, 0); } 100% { transform: translate(-100px, -173.2px); } }
+        
+        .hero-content { z-index: 1; max-width: 900px; padding: 20px; animation: fadeInUp 0.8s ease forwards; }
+        .hero-title { font-size: 4.5rem; font-weight: 900; color: #fff; margin-bottom: 20px; line-height: 1.05; letter-spacing: -2px; }
+        .hero-title span { color: var(--cyan); text-shadow: 0 0 25px rgba(0, 240, 255, 0.5); }
+        .hero-desc { font-size: 1.2rem; color: #cbd5e1; line-height: 1.6; margin-bottom: 40px; font-weight: 300; max-width: 700px; margin-left: auto; margin-right: auto;}
+        
+        .btn-launch {
+            padding: 20px 50px; background: transparent; border: 2px solid var(--cyan); color: var(--cyan);
+            font-size: 1.2rem; font-weight: 900; font-family: 'Outfit', sans-serif; text-transform: uppercase; letter-spacing: 3px; cursor: pointer;
+            border-radius: 50px; transition: all 0.3s ease; box-shadow: inset 0 0 0 rgba(0, 240, 255, 0.2), 0 0 20px rgba(0, 240, 255, 0.2);
+            animation: pulseGlow 2s infinite alternate; margin-bottom: 50px;
+        }
+        @keyframes pulseGlow { 0% { box-shadow: 0 0 15px rgba(0, 240, 255, 0.2); } 100% { box-shadow: 0 0 35px rgba(0, 240, 255, 0.6); } }
+        .btn-launch:hover { background: var(--cyan); color: #000; transform: translateY(-3px); }
+
+        .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 30px; width: 100%; max-width: 1100px; z-index: 1; padding: 0 20px; }
+        .info-card {
+            background: rgba(15, 23, 42, 0.5); backdrop-filter: blur(10px); border: 1px solid var(--glass-border);
+            border-radius: 16px; padding: 35px 25px; text-align: left; transition: all 0.3s;
+            opacity: 0; transform: translateY(20px); animation: fadeInUp 0.8s ease forwards;
+        }
+        .info-card:nth-child(1) { animation-delay: 0.2s; }
+        .info-card:nth-child(2) { animation-delay: 0.4s; }
+        .info-card:nth-child(3) { animation-delay: 0.6s; }
+        .info-card:hover { transform: translateY(-10px); background: rgba(30, 41, 59, 0.8); border-color: rgba(0, 240, 255, 0.4); box-shadow: 0 15px 30px rgba(0,0,0,0.5); }
+        .info-icon { font-size: 2.5rem; margin-bottom: 15px; color: var(--cyan); text-shadow: 0 0 15px rgba(0, 240, 255, 0.5); }
+        .info-card h3 { color: #fff; font-size: 1.3rem; margin-top: 0; margin-bottom: 10px; font-weight: 800; letter-spacing: -0.5px;}
+        .info-card p { color: #94a3b8; font-size: 0.95rem; line-height: 1.6; margin: 0; font-weight: 400; }
+        
+        /* NCAP BANNER CARD */
+        .ncap-card {
+            background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(12px); border: 1px solid var(--cyan);
+            border-radius: 16px; padding: 30px; text-align: left; transition: all 0.4s ease;
+            opacity: 0; transform: translateY(20px); animation: fadeInUp 0.8s ease forwards; animation-delay: 0.8s;
+            margin-top: 30px; display: flex; align-items: center; gap: 25px; cursor: pointer; max-width: 1100px; width: calc(100% - 40px); z-index: 1; box-shadow: inset 0 0 20px rgba(0, 240, 255, 0.1);
+        }
+        .ncap-card:hover { transform: translateY(-5px); background: rgba(30, 41, 59, 0.9); box-shadow: inset 0 0 30px rgba(0, 240, 255, 0.2), 0 20px 40px rgba(0,0,0,0.6); }
+        .ncap-card .info-icon { margin-bottom: 0; font-size: 3.5rem; }
+        .ncap-card h3 { color: #fff; font-size: 1.5rem; margin: 0 0 8px 0; font-weight: 900; letter-spacing: -0.5px; display: flex; align-items: center; gap: 10px;}
+        .ncap-card p { color: #cbd5e1; font-size: 1rem; line-height: 1.6; margin: 0; font-weight: 300; }
+        .ncap-card p b { color: var(--cyan); font-weight: 600; }
+
+        @media (max-width: 768px) { .ncap-card { flex-direction: column; text-align: center; } }
+        @keyframes fadeInUp { to { opacity: 1; transform: translateY(0); } }
+
+        /* --- TAB 2: SIMULATION (3D) --- */
+        #tab-sim { overflow: hidden; }
+        #canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; }
+        
+        #ui-panel {
+            position: absolute; top: 25px; left: 25px; width: 380px; z-index: 10;
+            background: var(--glass); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+            padding: 25px; border-radius: 16px; border: 1px solid var(--glass-border);
+            box-shadow: 0 30px 60px -15px rgba(0,0,0,0.9); max-height: calc(100vh - 130px); overflow-y: auto;
+            scrollbar-width: thin; scrollbar-color: var(--cyan) transparent;
+        }
+        #ui-panel::-webkit-scrollbar { width: 6px; }
+        #ui-panel::-webkit-scrollbar-thumb { background: var(--cyan); border-radius: 3px; }
+
+        #ui-panel h2 { margin: 0; font-size: 1.8rem; color: #fff; font-weight: 900; letter-spacing: -1px;}
+        #ui-panel p.subtitle { margin: 2px 0 20px 0; font-size: 0.8rem; color: var(--cyan); text-transform: uppercase; font-weight: 700; letter-spacing: 2px;}
+        
+        .control-group { margin-bottom: 15px; background: rgba(0,0,0,0.4); padding: 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.03); }
+        .control-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .control-header label { font-size: 0.75rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px;}
+        .value-badge { background: #1e293b; padding: 4px 10px; border-radius: 6px; font-family: 'Space Mono', monospace; font-size: 0.8rem; color: #38bdf8; font-weight: 700;}
+        
+        .segment-control { display: flex; gap: 6px; background: #0f172a; padding: 6px; border-radius: 8px; border: 1px solid #334155; }
+        .segment-btn {
+            flex: 1; padding: 8px 0; background: transparent; color: #94a3b8; border: none; border-radius: 6px;
+            font-family: 'Outfit', sans-serif; font-size: 0.85rem; font-weight: 700; cursor: pointer; transition: all 0.3s;
+        }
+        .segment-btn.active { background: var(--cyan); color: #000; box-shadow: 0 0 12px rgba(0, 240, 255, 0.5); }
+        .segment-btn:hover:not(.active) { color: #fff; background: rgba(255,255,255,0.05); }
+        .dynamic-desc { font-size: 0.7rem; color: #cbd5e1; text-align: center; margin-top: 8px; font-style: italic; opacity: 0.8;}
+
+        input[type="range"] { width: 100%; appearance: none; background: transparent; cursor: pointer; margin: 8px 0; }
+        input[type="range"]::-webkit-slider-runnable-track { background: #334155; height: 6px; border-radius: 3px; }
+        input[type="range"]::-webkit-slider-thumb { appearance: none; margin-top: -6px; width: 18px; height: 18px; background: var(--cyan); border-radius: 50%; box-shadow: 0 0 15px rgba(0, 240, 255, 0.6); transition: transform 0.1s;}
+        input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+        #btn-crash { width: 100%; padding: 16px; background: linear-gradient(135deg, #00f0ff 0%, #0088ff 100%); color: #000; border: none; border-radius: 10px; font-weight: 900; font-family: 'Outfit', sans-serif; font-size: 1.1rem; cursor: pointer; margin-top: 10px; text-transform: uppercase; letter-spacing: 2px; transition: all 0.3s; box-shadow: 0 10px 20px -5px rgba(0, 240, 255, 0.4);}
+        #btn-crash:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 15px 25px -5px rgba(0, 240, 255, 0.6); }
+        #btn-crash:disabled { background: #1e293b; color: #475569; box-shadow: none; cursor: not-allowed; }
+        
+        #btn-export { width: 100%; padding: 12px; background: #0f172a; color: #94a3b8; border: 1px solid #334155; border-radius: 8px; font-family: 'Outfit', sans-serif; font-size: 0.85rem; margin-top: 12px; cursor: pointer; text-transform: uppercase; font-weight: 800; letter-spacing: 1px; transition: all 0.3s;}
+        #btn-export:hover:not(:disabled) { border-color: var(--cyan); color: var(--cyan); background: rgba(0, 240, 255, 0.1);}
+        
+        #phase-display { background: rgba(0,0,0,0.6); border: 1px solid #334155; padding: 12px; text-align: center; border-radius: 30px; margin-top: 15px; font-weight: 900; font-size: 0.9rem; letter-spacing: 2px; text-transform: uppercase; transition: all 0.3s; }
+        
+        #graph-container { margin-top: 15px; background: rgba(0,0,0,0.5); border: 1px solid #334155; border-radius: 10px; padding: 12px; }
+        .graph-title { font-size: 0.65rem; color: #94a3b8; margin-bottom: 8px; font-weight: 700; display: flex; justify-content: space-between; text-transform: uppercase; letter-spacing: 1px;}
+        canvas#physics-graph { width: 100%; height: 100px; border-bottom: 1px solid #475569; border-left: 1px solid #475569; }
+        
+        #energy-bar-container { width: 100%; height: 8px; background: #1e293b; border-radius: 4px; margin-top: 20px; display: flex; overflow: hidden; box-shadow: inset 0 2px 5px rgba(0,0,0,0.5);}
+        #energy-ke { height: 100%; background: var(--cyan); width: 100%; transition: width 0.1s linear;}
+        #energy-abs { height: 100%; background: #10b981; width: 0%; transition: width 0.1s linear;}
+        .energy-labels { display: flex; justify-content: space-between; font-size: 0.6rem; color: #94a3b8; margin-top: 6px; text-transform: uppercase; font-weight: 800; letter-spacing: 1px;}
+
+        /* 2x2 Grid for Updated Metrics */
+        #results-panel { margin-top: 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .metric-box { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.03); padding: 12px; border-radius: 10px; text-align: center; }
+        .metric-label { font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; margin-bottom: 4px; display: block; font-weight: 700; letter-spacing: 1px;}
+        .metric-value { font-weight: 700; font-size: 1.2rem; font-family: 'Space Mono', monospace; color: #fff;}
+
+        /* --- TAB 3: PRESENTATION (PPT) --- */
+        #tab-ppt { padding: 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .ppt-container {
+            width: 100%; max-width: 1200px; height: 80vh; background: var(--glass);
+            border-radius: 20px; border: 1px solid var(--glass-border); box-shadow: 0 30px 60px rgba(0,0,0,0.6);
+            padding: 25px; box-sizing: border-box; display: flex; flex-direction: column;
+        }
+        .ppt-container h3 { margin-top: 0; color: #fff; font-size: 1.8rem; font-weight: 900; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; letter-spacing: -0.5px;}
+        .ppt-container iframe { width: 100%; flex-grow: 1; border: none; border-radius: 10px; background: #000; box-shadow: inset 0 0 20px rgba(0,0,0,1); }
+
+        /* --- TAB 4: TEAM --- */
+        #tab-team { padding: 80px 40px; display: flex; flex-direction: column; align-items: center; }
+        .team-header { text-align: center; margin-bottom: 60px; }
+        .team-header h2 { font-size: 3.5rem; color: #fff; font-weight: 900; margin-bottom: 10px; letter-spacing: -1.5px;}
+        .team-header p { color: var(--cyan); font-weight: 800; text-transform: uppercase; letter-spacing: 4px; font-size: 1rem;}
+        
+        .team-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 40px; width: 100%; max-width: 1300px; }
+        .team-card {
+            background: rgba(15, 23, 42, 0.5); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); border-radius: 20px;
+            padding: 50px 30px; text-align: center; transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); position: relative; overflow: hidden;
+        }
+        .team-card::before {
+            content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 5px;
+            background: linear-gradient(90deg, transparent, var(--cyan), transparent); opacity: 0; transition: opacity 0.4s;
+        }
+        .team-card:hover { transform: translateY(-15px); background: rgba(30, 41, 59, 0.9); border-color: rgba(0, 240, 255, 0.4); box-shadow: 0 25px 50px -12px rgba(0,0,0,0.8); cursor: pointer; }
+        .team-card:hover::before { opacity: 1; }
+        
+        .avatar-placeholder {
+            width: 110px; height: 110px; border-radius: 50%; background: #0f172a; margin: 0 auto 25px;
+            display: flex; justify-content: center; align-items: center; border: 3px solid var(--cyan);
+            font-size: 2.2rem; font-weight: 900; color: #fff; box-shadow: 0 0 30px rgba(0, 240, 255, 0.3);
+            font-family: 'Space Mono', monospace; letter-spacing: -2px; transition: transform 0.3s;
+        }
+        .team-card:hover .avatar-placeholder { transform: scale(1.1); border-color: #fff; }
+        .team-card h3 { margin: 0 0 10px 0; color: #f8fafc; font-size: 1.6rem; font-weight: 800; letter-spacing: -0.5px;}
+        .team-card p { margin: 0; color: #94a3b8; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 2px; font-weight: 700;}
+        
+        #instructions { position: absolute; bottom: 25px; right: 25px; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(10px); color: #cbd5e1; padding: 15px 20px; border-radius: 12px; font-size: 0.85rem; font-weight: 500; border: 1px solid var(--glass-border); text-align: right; z-index: 10;}
+    </style>
+</head>
+<body>
+
+    <nav>
+        <div class="nav-brand">CRASH<span>.exe</span></div>
+        <div class="nav-links">
+            <a class="nav-link active" onclick="switchTab('tab-home', this)">Introduction</a>
+            <a class="nav-link" onclick="switchTab('tab-sim', this)">Sandbox</a>
+            <a class="nav-link" onclick="switchTab('tab-ppt', this)">Presentation</a>
+            <a class="nav-link" onclick="switchTab('tab-team', this)">Research Team</a>
+        </div>
+    </nav>
+
+    <section id="tab-home" class="tab-section active">
+        <div class="honeycomb-bg"></div>
+        <div class="hero-content">
+            <h1 class="hero-title">How Shapes <br><span>Save Lives</span></h1>
+            <p class="hero-desc">An interactive crash simulator that shows why nature's honeycomb design is the best at absorbing energy and protecting passengers during high-speed impacts.</p>
+            <button class="btn-launch" onclick="document.querySelectorAll('.nav-link')[1].click()">Launch Sandbox</button>
+        </div>
+
+        <div class="info-grid">
+            <div class="info-card">
+                <div class="info-icon">⬡</div>
+                <h3>Nature's Geometry</h3>
+                <p>The 120-degree internal angles of a hexagon naturally prevent localized stress. This makes it structurally superior and far more stable than 90-degree square grids under extreme force.</p>
+            </div>
+            <div class="info-card">
+                <div class="info-icon">📉</div>
+                <h3>Safe Energy Plateau</h3>
+                <p>Instead of violently snapping, the honeycomb walls fold smoothly like an accordion. This creates a steady deceleration curve, keeping forces safely managed for the passenger.</p>
+            </div>
+            <div class="info-card">
+                <div class="info-icon">🚀</div>
+                <h3>Maximum Stopping Power</h3>
+                <p>Honeycomb provides the highest specific energy absorption known in modern engineering. It absorbs the maximum kinetic impact while keeping the vehicle extremely lightweight.</p>
+            </div>
+        </div>
+
+        <div class="ncap-card" onclick="window.open('https://www.autocarindia.com/car-news/global-ncap-410355', '_blank')">
+            <div class="info-icon">🏎️</div>
+            <div>
+                <h3>Global NCAP 64 km/h Standard</h3>
+                <p>The globally accepted threshold for frontal crash testing is 64 km/h (40 mph). At this speed, kinetic energy multiplies dangerously, requiring advanced structural buckling to ensure passenger survival. <br><b>Tap here to read the official Global NCAP research article ↗</b></p>
+            </div>
+        </div>
+    </section>
+
+    <section id="tab-sim" class="tab-section">
+        <div id="canvas-container"></div>
+        
+        <div id="ui-panel">
+            <h2>Impact Analysis Lab</h2>
+            <p class="subtitle">Standard 64 km/h NCAP Test</p>
+            
+            <div class="control-group">
+                <div class="control-header"><label>Structural Geometry</label></div>
+                <div class="segment-control" id="structure-toggles">
+                    <button class="segment-btn active" data-value="honeycomb">⬡ Hex</button>
+                    <button class="segment-btn" data-value="square">⊞ Sqr</button>
+                    <button class="segment-btn" data-value="tube">◯ Tube</button>
+                    <button class="segment-btn" data-value="solid">⬛ Solid</button>
+                </div>
+                <div id="structure-desc" class="dynamic-desc">Optimal energy absorption plateau (Safe)</div>
+            </div>
+
+            <div class="control-group">
+                <div class="control-header"><label>Foil Density</label><span class="value-badge" id="val-dense">100%</span></div>
+                <input type="range" id="param-density" min="20" max="200" step="5" value="100">
+            </div>
+
+            <div class="control-group">
+                <div class="control-header"><label>Vehicle Mass</label><span class="value-badge" id="val-mass">1500 kg</span></div>
+                <input type="range" id="param-mass" min="500" max="3500" step="50" value="1500">
+            </div>
+            
+            <div class="control-group">
+                <div class="control-header"><label>Impact Velocity</label><span class="value-badge" id="val-vel">64 km/h</span></div>
+                <input type="range" id="param-vel" min="10" max="150" step="1" value="64">
+            </div>
+
+            <button id="btn-crash">INITIATE TEST</button>
+            <div id="phase-display">SYSTEM IDLE</div>
+
+            <div id="graph-container">
+                <div class="graph-title"><span>FORCE (kN)</span> <span>DISP (m)</span></div>
+                <canvas id="physics-graph" width="300" height="100"></canvas>
+            </div>
+
+            <div id="energy-bar-container">
+                <div id="energy-ke"></div>
+                <div id="energy-abs"></div>
+            </div>
+            <div class="energy-labels"><span>Kinetic Energy</span><span>Strain Energy</span></div>
+
+            <div id="results-panel">
+                <div class="metric-box">
+                    <span class="metric-label">Initial Energy</span>
+                    <span class="metric-value" id="res-ke">0.0 kJ</span>
+                </div>
+                <div class="metric-box">
+                    <span class="metric-label">Energy Absorbed</span>
+                    <span class="metric-value" id="res-abs" style="color:var(--cyan);">0%</span>
+                </div>
+                <div class="metric-box">
+                    <span class="metric-label">Peak Impact Force</span>
+                    <span class="metric-value" id="res-force">0.0 kN</span>
+                </div>
+                <div class="metric-box">
+                    <span class="metric-label">Survival Rate</span>
+                    <span class="metric-value" id="res-surv" style="color:#10b981;">100%</span>
+                </div>
+            </div>
+            <button id="btn-export" disabled>⬇ Export Test Data (CSV)</button>
+        </div>
+        
+        <div id="instructions">
+            🖱️ <b>Orbit:</b> Left Click | <b>Pan:</b> Right Click
+        </div>
+    </section>
+
+    <section id="tab-ppt" class="tab-section">
+        <div class="ppt-container">
+            <h3>📊 Project Presentation</h3>
+            <iframe src="https://www.canva.com/design/DAHBXXykTiY/YsrANPf_tulWOPQYXrCXtQ/view?embed" allowfullscreen="allowfullscreen" allow="fullscreen"></iframe>
+        </div>
+    </section>
+
+    <section id="tab-team" class="tab-section">
+        <div class="team-header">
+            <h2>Research & Development</h2>
+            <p>MBA Tech - IT 1st Year 2025-30</p>
+        </div>
+        <div class="team-grid">
+            <div class="team-card" onclick="window.open('https://www.linkedin.com/in/aarush-atale-b9379934b/', '_blank')">
+                <div class="avatar-placeholder">AA</div>
+                <h3>Aarush Atale</h3>
+                <p>MPSTME</p>
+            </div>
+            <div class="team-card" onclick="window.open('https://www.linkedin.com/in/kalash-jain-91a735306/', '_blank')">
+                <div class="avatar-placeholder">KJ</div>
+                <h3>Kalash Jain</h3>
+                <p>MPSTME</p>
+            </div>
+            <div class="team-card">
+                <div class="avatar-placeholder">AG</div>
+                <h3>Anuj Gulhane</h3>
+                <p>MPSTME</p>
+            </div>
+            <div class="team-card">
+                <div class="avatar-placeholder">AK</div>
+                <h3>Aadi Kadam</h3>
+                <p>MPSTME</p>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        // --- TAB SWITCHING LOGIC ---
+        function switchTab(tabId, element) {
+            document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
+            element.classList.add('active');
+            
+            document.querySelectorAll('.tab-section').forEach(section => section.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+        }
+
+        // --- THREE.JS PHYSICS ENGINE ---
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2('#030508', 0.005);
+        const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(-20, 20, 70);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+        
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.target.set(30, 10, 0);
+        controls.enableZoom = false; 
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.4)); 
+        const dLight = new THREE.DirectionalLight(0xffffff, 1.5);
+        dLight.position.set(20, 80, 50); dLight.castShadow = true;
+        scene.add(dLight);
+        const impactGlowLight = new THREE.PointLight(0xff4400, 0, 80);
+        scene.add(impactGlowLight);
+
+        let currentSceneGroup = new THREE.Group();
+        scene.add(currentSceneGroup);
+        
+        let structColumns = []; 
+        let impactorWall = null;
+        const RADIUS = 2.0; const WALL_THICKNESS = 0.25; const CELL_DEPTH = 8.0; 
+        const COLS = 22; const ROWS = 7; const w_orig = Math.sqrt(3) * RADIUS; 
+        const square_side = w_orig; const structureLength = COLS * w_orig; 
+        const START_Y = 2; const METER_PER_UNIT = 0.025; 
+        
+        let isCrashing = false; let mass = 1500; let velocity = 0; let displacement_visual = 0; 
+        let maxDisplacement = structureLength * 0.85; 
+        
+        let peakG = 0;
+        let peakForce = 0;
+
+        const graphCanvas = document.getElementById('physics-graph'); const ctx = graphCanvas.getContext('2d');
+        let graphData = [];
+
+        const ui = {
+            struct: { value: 'honeycomb' }, 
+            mass: document.getElementById('param-mass'),
+            vel: document.getElementById('param-vel'),
+            dense: document.getElementById('param-density'),
+            btn: document.getElementById('btn-crash'),
+            btnExp: document.getElementById('btn-export'),
+            phase: document.getElementById('phase-display'),
+            desc: document.getElementById('structure-desc')
+        };
+
+        const structBtns = document.querySelectorAll('.segment-btn');
+        const descriptions = {
+            'honeycomb': 'Optimal energy absorption plateau (Safe)',
+            'square': 'Jagged buckling, high stress concentrations',
+            'tube': 'Euler buckling failure, low absorption',
+            'solid': 'Rigid shock transfer (Fatal)'
+        };
+
+        structBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                if(isCrashing) return; 
+                structBtns.forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                ui.struct.value = e.target.getAttribute('data-value');
+                ui.desc.innerText = descriptions[ui.struct.value];
+                handleParamChange();
+            });
+        });
+
+        const matBase = new THREE.MeshStandardMaterial({ color: 0xa0aec0, metalness: 0.9, roughness: 0.4, flatShading: true });
+
+        function createHollowHexagon() {
+            const shape = new THREE.Shape();
+            for(let i=0; i<6; i++) {
+                let angle = i * Math.PI / 3 + Math.PI/6;
+                i===0 ? shape.moveTo(Math.cos(angle)*RADIUS, Math.sin(angle)*RADIUS) : shape.lineTo(Math.cos(angle)*RADIUS, Math.sin(angle)*RADIUS);
+            }
+            const hole = new THREE.Path(); const innerRad = RADIUS - WALL_THICKNESS;
+            for(let i=0; i<6; i++) {
+                let angle = i * Math.PI / 3 + Math.PI/6;
+                i===0 ? hole.moveTo(Math.cos(angle)*innerRad, Math.sin(angle)*innerRad) : hole.lineTo(Math.cos(angle)*innerRad, Math.sin(angle)*innerRad);
+            }
+            shape.holes.push(hole);
+            const ext = new THREE.ExtrudeGeometry(shape, { depth: CELL_DEPTH, bevelEnabled: false, curveSegments: 1 });
+            ext.translate(0, 0, -CELL_DEPTH/2); return ext;
+        }
+
+        function createHollowSquare() {
+            const shape = new THREE.Shape(); const s = square_side / 2;
+            shape.moveTo(-s, -s); shape.lineTo(s, -s); shape.lineTo(s, s); shape.lineTo(-s, s); shape.lineTo(-s, -s);
+            const hole = new THREE.Path(); const inS = s - WALL_THICKNESS;
+            hole.moveTo(-inS, -inS); hole.lineTo(inS, -inS); hole.lineTo(inS, inS); hole.lineTo(-inS, inS); hole.lineTo(-inS, -inS);
+            shape.holes.push(hole);
+            const ext = new THREE.ExtrudeGeometry(shape, { depth: CELL_DEPTH, bevelEnabled: false, curveSegments: 1 });
+            ext.translate(0, 0, -CELL_DEPTH/2); return ext;
+        }
+
+        function generateScene() {
+            currentSceneGroup.clear(); structColumns = []; graphData = []; displacement_visual = 0; impactGlowLight.intensity = 0; drawGraph();
+            ui.btnExp.disabled = true;
+
+            const gGeom = new THREE.BoxGeometry(100, 1, 40);
+            const gMat = new THREE.MeshStandardMaterial({ color: 0x0f172a });
+            const ground = new THREE.Mesh(gGeom, gMat); ground.position.set(30, START_Y - RADIUS - 0.5, 0); ground.receiveShadow = true;
+            currentSceneGroup.add(ground);
+            const backstop = new THREE.Mesh(new THREE.BoxGeometry(4, 25, 20), new THREE.MeshStandardMaterial({ color: 0x1e293b }));
+            backstop.position.set(structureLength + 2, START_Y + 10, 0); currentSceneGroup.add(backstop);
+
+            const type = ui.struct.value;
+            if (type === 'solid') {
+                const solidMesh = new THREE.Mesh(new THREE.BoxGeometry(structureLength, (ROWS * RADIUS * 1.5), CELL_DEPTH), matBase.clone()); 
+                solidMesh.position.set(structureLength/2 - w_orig/2, START_Y + (ROWS * RADIUS * 1.5)/2 - RADIUS, 0);
+                currentSceneGroup.add(solidMesh); structColumns.push({ isSolid: true, mesh: solidMesh });
+            } else {
+                const geom = type === 'square' ? createHollowSquare() : (type === 'honeycomb' ? createHollowHexagon() : new THREE.TorusGeometry(RADIUS, WALL_THICKNESS, 8, 24));
+                for (let c = 0; c < COLS; c++) {
+                    let colGroup = { origX: c * w_orig, cells: [] };
+                    for (let r = 0; r < ROWS; r++) {
+                        const xOffset = (type === 'square' || r % 2 === 0) ? 0 : w_orig / 2;
+                        const mesh = new THREE.Mesh(geom, matBase.clone());
+                        mesh.position.set(colGroup.origX + xOffset, START_Y + (r * 1.5 * RADIUS), 0);
+                        mesh.userData = { baseX: colGroup.origX + xOffset, row: r };
+                        currentSceneGroup.add(mesh); colGroup.cells.push(mesh);
+                    }
+                    structColumns.push(colGroup);
+                }
+            }
+            impactorWall = new THREE.Mesh(new THREE.BoxGeometry(6, 25, 20), new THREE.MeshStandardMaterial({ color: 0x3b82f6 }));
+            impactorWall.position.set(-2, START_Y + 10, 0); currentSceneGroup.add(impactorWall);
+            updateMetrics(0, false);
+            setPhase("SYSTEM IDLE", "#94a3b8", "transparent");
+        }
+
+        function getResistanceForce(visual_disp) {
+            if (visual_disp <= 0) return 0;
+            const type = ui.struct.value;
+            const densityScale = parseFloat(ui.dense.value) / 100;
+            const yieldPoint = w_orig * 0.5; 
+            
+            if (type === 'honeycomb') {
+                const PEAK = 240000 * densityScale; const PLATEAU = 200000 * densityScale; 
+                if (visual_disp < yieldPoint) return (visual_disp / yieldPoint) * PEAK;
+                if (visual_disp < maxDisplacement) return PLATEAU + Math.cos((visual_disp / w_orig) * Math.PI * 2) * (PLATEAU * 0.1);
+                return PLATEAU + Math.pow(visual_disp - maxDisplacement, 3) * 5000;
+            } else if (type === 'square') {
+                const PEAK = 280000 * densityScale; const PLATEAU = 120000 * densityScale; 
+                if (visual_disp < yieldPoint) return (visual_disp / yieldPoint) * PEAK;
+                if (visual_disp < maxDisplacement) return PLATEAU + Math.cos((visual_disp / square_side) * Math.PI * 2) * (PLATEAU * 0.8);
+                return PLATEAU + Math.pow(visual_disp - maxDisplacement, 3) * 5000;
+            } else if (type === 'solid') { return 8000000; } 
+            return 20000 * densityScale; 
+        }
+
+        function drawGraph() {
+            ctx.clearRect(0, 0, graphCanvas.width, graphCanvas.height);
+            ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 1;
+            for(let i=1; i<4; i++) { ctx.beginPath(); ctx.moveTo(0, i*25); ctx.lineTo(300, i*25); ctx.stroke(); }
+            if (graphData.length < 2) return;
+            const maxX = structureLength; const maxY = 400000; 
+            ctx.beginPath(); ctx.strokeStyle = '#00f0ff'; ctx.lineWidth = 2;
+            graphData.forEach((p, i) => i === 0 ? ctx.moveTo((p.x/maxX)*300, 100-((p.f/maxY)*100)) : ctx.lineTo((p.x/maxX)*300, 100-((p.f/maxY)*100)));
+            ctx.stroke();
+        }
+
+        function applyDeformation(visual_disp) {
+            impactorWall.position.x = -2 + visual_disp;
+            const type = ui.struct.value; if (type === 'solid') return;
+            const baseWidth = w_orig; const maxCrush = w_orig * 0.85; 
+            let remaining = visual_disp; let currentX = visual_disp; 
+            structColumns.forEach(col => {
+                let crush = Math.min(remaining, maxCrush); remaining -= crush;
+                let scaleX = (baseWidth - crush) / baseWidth;
+                const heat = crush / maxCrush; 
+                
+                col.cells.forEach(cell => {
+                    if (type === 'tube') {
+                        const kinkScaleY = 1.0 - (heat * 0.5); 
+                        cell.scale.set(scaleX, kinkScaleY, 1.0 + heat); 
+                    } else {
+                        cell.scale.set(scaleX, 1.0, 1.0); 
+                    }
+                    
+                    let rowStagger = 0;
+                    if (type !== 'square') {
+                        rowStagger = (cell.userData.row % 2 === 0) ? 0 : ((baseWidth - crush) / 2);
+                    }
+                    cell.position.x = currentX + rowStagger;
+
+                    if (heat > 0.01) {
+                        let hue = Math.max(0, 0.66 - (heat * 0.66));
+                        let lit = heat > 0.9 ? 0.5 + (heat - 0.9) * 4.0 : 0.5;
+                        cell.material.color.setHSL(hue, 1.0, Math.min(1.0, lit)); 
+                        cell.material.emissive.setHSL(hue, 1.0, heat * 0.5); 
+                        cell.material.metalness = 0.2;
+                    } else {
+                        cell.material.color.setHex(0xa0aec0);
+                        cell.material.emissive.setHex(0x000000);
+                        cell.material.metalness = 0.9;
+                    }
+                });
+                currentX += (baseWidth - crush);
+            });
+        }
+
+        function updateMetrics(current_ke, isFatal) {
+            mass = parseFloat(ui.mass.value);
+            const initialKE = 0.5 * mass * Math.pow(parseFloat(ui.vel.value)/3.6, 2);
+            document.getElementById('res-ke').innerText = (initialKE / 1000).toFixed(1) + " kJ";
+            
+            let absPercent = initialKE > 0 ? Math.min(100, Math.max(0, ((initialKE-current_ke)/initialKE)*100)) : 0;
+            document.getElementById('res-abs').innerText = absPercent.toFixed(1) + "%";
+            
+            document.getElementById('res-force').innerText = (peakForce / 1000).toFixed(1) + " kN";
+
+            const survEl = document.getElementById('res-surv');
+            if (isFatal) {
+                survEl.innerText = "FATAL (0%)";
+                survEl.style.color = "#ef4444";
+            } else {
+                let survival = Math.max(0, Math.min(100, 100 - ((peakG - 15) * 2)));
+                survEl.innerText = survival.toFixed(1) + "%";
+                if(survival > 80) survEl.style.color = "#10b981"; 
+                else if(survival > 40) survEl.style.color = "#f59e0b"; 
+                else survEl.style.color = "#ef4444"; 
+            }
+
+            document.getElementById('energy-ke').style.width = (100 - absPercent) + "%";
+            document.getElementById('energy-abs').style.width = absPercent + "%";
+        }
+
+        function setPhase(text, color, bg) { ui.phase.innerText = text; ui.phase.style.color = color; ui.phase.style.borderColor = color; ui.phase.style.background = bg; }
+
+        function handleParamChange() {
+            document.getElementById('val-mass').innerText = ui.mass.value + " kg";
+            document.getElementById('val-vel').innerText = ui.vel.value + " km/h";
+            document.getElementById('val-dense').innerText = ui.dense.value + "%";
+            if (!isCrashing) {
+                peakG = 0;
+                peakForce = 0;
+                document.getElementById('res-force').innerText = "0.0 kN";
+                document.getElementById('res-surv').innerText = "100%";
+                document.getElementById('res-surv').style.color = "#10b981";
+                generateScene();
+            }
+        }
+
+        [ui.mass, ui.vel, ui.dense].forEach(el => el.addEventListener('input', handleParamChange));
+        
+        ui.btn.addEventListener('click', () => { 
+            isCrashing = true; 
+            mass = parseFloat(ui.mass.value); 
+            velocity = parseFloat(ui.vel.value)/3.6; 
+            graphData = []; 
+            peakG = 0;
+            peakForce = 0;
+            ui.btn.disabled = true; 
+            ui.btnExp.disabled = true; 
+            document.getElementById('res-force').innerText = "0.0 kN";
+            document.getElementById('res-surv').innerText = "100%";
+            document.getElementById('res-surv').style.color = "#10b981";
+            generateScene(); 
+        });
+
+        ui.btnExp.addEventListener('click', () => {
+            let csvContent = "data:text/csv;charset=utf-8,Time(s),Displacement(m),Force(kN)\n";
+            graphData.forEach((row, index) => {
+                let t = (index * 0.005).toFixed(4);
+                let d = (row.x * METER_PER_UNIT).toFixed(4);
+                let f = (row.f / 1000).toFixed(2);
+                csvContent += `${t},${d},${f}\n`;
+            });
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "FEA_Crash_Data.csv");
+            document.body.appendChild(link); link.click(); document.body.removeChild(link);
+        });
+
+        generateScene();
+
+        function animate() {
+            requestAnimationFrame(animate); controls.update();
+            if (isCrashing) {
+                const force = getResistanceForce(displacement_visual); 
+                const acc = -(force / mass);
+                
+                const currentG = Math.abs(acc)/9.81;
+                if(currentG > peakG) peakG = currentG;
+                if(force > peakForce) peakForce = force;
+
+                velocity += acc * 0.005; 
+                let step_disp = (velocity * 0.005) / METER_PER_UNIT;
+                const CRUSH_LIMIT = structureLength * 0.92; 
+
+                if (displacement_visual + step_disp >= CRUSH_LIMIT) {
+                    displacement_visual = CRUSH_LIMIT;
+                    graphData.push({x: displacement_visual, f: force}); drawGraph();
+                    applyDeformation(displacement_visual);
+                    
+                    isCrashing = false; ui.btn.disabled = false; ui.btnExp.disabled = false; 
+                    
+                    if (velocity > 2) { 
+                        updateMetrics(0, true); 
+                        setPhase("CRITICAL FAILURE (CRUSHED)", "#ef4444", "rgba(239, 68, 68, 0.2)");
+                    } else {
+                        updateMetrics(0, false);
+                        setPhase("TEST COMPLETE", "#10b981", "rgba(16, 185, 129, 0.1)"); 
+                    }
+                    velocity = 0;
+                } else {
+                    displacement_visual += step_disp;
+                    graphData.push({x: displacement_visual, f: force}); drawGraph();
+                    updateMetrics(0.5*mass*Math.max(0,velocity)**2, false);
+                    applyDeformation(displacement_visual);
+                    
+                    if (velocity <= 0) { 
+                        isCrashing = false; ui.btn.disabled = false; ui.btnExp.disabled = false; 
+                        setPhase("TEST COMPLETE", "#10b981", "rgba(16, 185, 129, 0.1)"); 
+                    }
+                }
+            }
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
